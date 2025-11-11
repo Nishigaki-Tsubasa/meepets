@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import EditProfile from '../components/EditProfile';
 import MealRegistrationForm from '../components/MealRegistrationForm';
@@ -19,6 +19,7 @@ import JitsiMeet from '../components/JitsiMeet';
 import Notifications from '../components/Notifications';
 import WalkRequestForm from '../components/WalkRequestForm';
 import WalkList from '../components/WalkList';
+import MyWalkRequests from '../components/MyWalkRequests';
 
 import colors from '../colors';
 import '../styles/Home.css';
@@ -56,9 +57,10 @@ function Home() {
                     if (userDocSnap.exists()) {
                         const data = userDocSnap.data();
                         console.log('Firestore user data:', data);
-                        // owner マップの username を取得
-                        const ownerUsername = data.owner?.username || '名無し';
-                        setUsername(ownerUsername);
+
+                        // ✅ displayNameを優先して表示。なければowner.usernameを使用
+                        const displayName = data.owner?.username || data.displayName || '名無し';
+                        setUsername(displayName);
                     } else {
                         setUsername('名無し');
                     }
@@ -72,7 +74,6 @@ function Home() {
         });
         return () => unsubscribe();
     }, []);
-
 
     // ログアウト処理
     const handleLogout = async () => {
@@ -91,6 +92,7 @@ function Home() {
         { to: '/home/matching', icon: 'bi-people', label: 'マッチング済み' },
         { to: '/home/chat', icon: 'bi-chat-dots', label: 'チャット' },
         { to: '/home/WalkList', icon: 'bi-bell', label: '散歩掲示板' },
+        { to: '/home/MyWalkRequests', icon: 'bi-bell', label: 'マイ散歩リクエスト' },
     ];
 
     // モバイルクリック時に閉じる
@@ -99,7 +101,10 @@ function Home() {
     };
 
     return (
-        <div className="d-flex flex-column flex-md-row" style={{ minHeight: '100vh', backgroundColor: colors.mainBg, color: colors.text }}>
+        <div
+            className="d-flex flex-column flex-md-row"
+            style={{ minHeight: '100vh', backgroundColor: colors.mainBg, color: colors.text }}
+        >
             {/* モバイル時ヘッダー */}
             {isMobile && (
                 <header
@@ -108,13 +113,24 @@ function Home() {
                 >
                     <button
                         onClick={() => setSidebarOpenMobile(true)}
-                        style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', color: 'inherit' }}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            margin: 0,
+                            cursor: 'pointer',
+                            color: 'inherit',
+                        }}
                     >
                         <i className="bi bi-list fs-4"></i>
                     </button>
 
                     <div className="d-flex align-items-center">
-                        <img src="/favicon.ico" alt="App Icon" style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 8 }} />
+                        <img
+                            src="/favicon.ico"
+                            alt="App Icon"
+                            style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 8 }}
+                        />
                         <span style={{ fontWeight: '600', fontSize: '1.2rem', color: '#ff6f61' }}>meeple</span>
                     </div>
 
@@ -126,10 +142,18 @@ function Home() {
             <nav
                 className="sidebar d-flex flex-column px-2 py-3 border-end"
                 style={{
-                    width: isMobile ? sidebarWidthOpen : sidebarOpenPC ? sidebarWidthOpen : sidebarWidthClosed,
+                    width: isMobile
+                        ? sidebarWidthOpen
+                        : sidebarOpenPC
+                            ? sidebarWidthOpen
+                            : sidebarWidthClosed,
                     backgroundColor: colors.subBg,
                     transition: 'transform 0.3s, width 0.3s',
-                    transform: isMobile ? (sidebarOpenMobile ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
+                    transform: isMobile
+                        ? sidebarOpenMobile
+                            ? 'translateX(0)'
+                            : 'translateX(-100%)'
+                        : 'translateX(0)',
                     overflow: 'hidden',
                     position: isMobile ? 'absolute' : 'relative',
                     zIndex: 1000,
@@ -141,7 +165,14 @@ function Home() {
                     <div className="d-flex justify-content-end mb-3">
                         <button
                             onClick={() => setSidebarOpenMobile(false)}
-                            style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', color: 'inherit' }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                margin: 0,
+                                cursor: 'pointer',
+                                color: 'inherit',
+                            }}
                         >
                             <i className="bi bi-x-lg fs-4"></i>
                         </button>
@@ -150,18 +181,56 @@ function Home() {
                     <div className="d-flex w-100 mb-3 align-items-center">
                         {sidebarOpenPC ? (
                             <>
-                                <img src="/favicon.ico" alt="App Icon" style={{ width: 40, height: 40, objectFit: 'cover', marginLeft: 8 }} />
+                                <img
+                                    src="/favicon.ico"
+                                    alt="App Icon"
+                                    style={{ width: 40, height: 40, objectFit: 'cover', marginLeft: 8 }}
+                                />
                                 <div className="flex-grow-1"></div>
-                                <button className="my-btn" onClick={() => setSidebarOpenPC(false)} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                                <button
+                                    className="my-btn"
+                                    onClick={() => setSidebarOpenPC(false)}
+                                    style={{
+                                        width: 40,
+                                        height: 40,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 8,
+                                    }}
+                                >
                                     <i className="bi bi-chevron-left"></i>
                                 </button>
                             </>
                         ) : (
-                            <div style={{ width: 40, height: 40, margin: '0 auto' }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+                            <div
+                                style={{ width: 40, height: 40, margin: '0 auto' }}
+                                onMouseEnter={() => setHovered(true)}
+                                onMouseLeave={() => setHovered(false)}
+                            >
                                 {!hovered ? (
-                                    <img src="/favicon.ico" alt="App Icon" style={{ width: 40, height: 40, objectFit: 'cover', cursor: 'pointer' }} />
+                                    <img
+                                        src="/favicon.ico"
+                                        alt="App Icon"
+                                        style={{
+                                            width: 40,
+                                            height: 40,
+                                            objectFit: 'cover',
+                                            cursor: 'pointer',
+                                        }}
+                                    />
                                 ) : (
-                                    <button className="my-btn" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSidebarOpenPC(true)}>
+                                    <button
+                                        className="my-btn"
+                                        style={{
+                                            width: 40,
+                                            height: 40,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                        }}
+                                        onClick={() => setSidebarOpenPC(true)}
+                                    >
                                         <i className="bi bi-chevron-right"></i>
                                     </button>
                                 )}
@@ -171,13 +240,31 @@ function Home() {
                 )}
 
                 {/* プロフィール */}
-                <div className="card mb-4 w-100" style={{ backgroundColor: colors.mainBg, border: 'none' }}>
-                    <div className="card-body d-flex align-items-center" onClick={() => { navigate('/home/EditProfile'); handleMobileClick(); }} style={{ cursor: 'pointer' }}>
-                        <i className="bi bi-person-circle fs-3 me-2" style={{ color: colors.accentBg, userSelect: 'none' }}></i>
+                <div
+                    className="card mb-4 w-100"
+                    style={{ backgroundColor: colors.mainBg, border: 'none' }}
+                >
+                    <div
+                        className="card-body d-flex align-items-center"
+                        onClick={() => {
+                            navigate('/home/EditProfile');
+                            handleMobileClick();
+                        }}
+                        style={{ cursor: 'pointer' }}
+                    >
+                        <i
+                            className="bi bi-person-circle fs-3 me-2"
+                            style={{ color: colors.accentBg, userSelect: 'none' }}
+                        ></i>
                         {(isMobile ? sidebarOpenMobile : sidebarOpenPC) && (
                             <div>
-                                <div className="small text-muted" style={{ userSelect: 'none' }}>ようこそ、</div>
-                                <div className="fw-bold text-dark text-truncate" style={{ maxWidth: 150, userSelect: 'none' }}>
+                                <div className="small text-muted" style={{ userSelect: 'none' }}>
+                                    ようこそ、
+                                </div>
+                                <div
+                                    className="fw-bold text-dark text-truncate"
+                                    style={{ maxWidth: 150, userSelect: 'none' }}
+                                >
                                     {username ? username : '読み込み中...'}
                                 </div>
                             </div>
@@ -193,19 +280,32 @@ function Home() {
                                 to={to}
                                 end
                                 onClick={handleMobileClick}
-                                className={({ isActive }) => `nav-link sidebarLink d-flex align-items-center ${isActive ? 'active' : ''}`}
+                                className={({ isActive }) =>
+                                    `nav-link sidebarLink d-flex align-items-center ${isActive ? 'active' : ''
+                                    }`
+                                }
                             >
                                 <i className={`bi ${icon} fs-5`}></i>
-                                {(isMobile ? sidebarOpenMobile : sidebarOpenPC) && <span className="ms-2">{label}</span>}
+                                {(isMobile ? sidebarOpenMobile : sidebarOpenPC) && (
+                                    <span className="ms-2">{label}</span>
+                                )}
                             </NavLink>
                         </li>
                     ))}
                 </ul>
 
                 {/* ログアウトボタン */}
-                <button onClick={() => { handleLogout(); handleMobileClick(); }} className="btn btn-danger w-100 mt-auto d-flex align-items-center justify-content-center">
+                <button
+                    onClick={() => {
+                        handleLogout();
+                        handleMobileClick();
+                    }}
+                    className="btn btn-danger w-100 mt-auto d-flex align-items-center justify-content-center"
+                >
                     <i className="bi bi-box-arrow-right"></i>
-                    {(isMobile ? sidebarOpenMobile : sidebarOpenPC) && <span className="ms-2">ログアウト</span>}
+                    {(isMobile ? sidebarOpenMobile : sidebarOpenPC) && (
+                        <span className="ms-2">ログアウト</span>
+                    )}
                 </button>
             </nav>
 
@@ -227,6 +327,7 @@ function Home() {
                     <Route path="/EditProfile" element={<EditProfile />} />
                     <Route path="/walkRequest" element={<WalkRequestForm />} />
                     <Route path="/WalkList" element={<WalkList />} />
+                    <Route path="/MyWalkRequests" element={<MyWalkRequests />} />
                 </Routes>
             </main>
         </div>

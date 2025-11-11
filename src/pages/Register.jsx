@@ -32,6 +32,7 @@ function Register({ setIsLoginPage }) {
                 createdAt: serverTimestamp(),
                 role: 'user',
                 firstcreated: true,
+                uid,
             });
 
             setSuccess('登録に成功しました！');

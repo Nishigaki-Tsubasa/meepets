@@ -45,10 +45,15 @@ const ChatList = () => {
                 // ユーザー名取得（キャッシュ）
                 if (!userMapTemp[otherUid]) {
                     const userDoc = await getDoc(doc(db, 'users', otherUid));
-                    userMapTemp[otherUid] = userDoc.exists()
-                        ? userDoc.data().username || '相手ユーザー'
-                        : '相手ユーザー';
+                    if (userDoc.exists()) {
+                        const data = userDoc.data();
+                        userMapTemp[otherUid] =
+                            data.owner?.username || data.username || data.displayName || '相手ユーザー';
+                    } else {
+                        userMapTemp[otherUid] = '相手ユーザー';
+                    }
                 }
+
 
                 room.otherUserName = userMapTemp[otherUid];
 

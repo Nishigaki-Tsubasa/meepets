@@ -1,22 +1,18 @@
-import React, { useState } from 'react';
-import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db } from '../firebase/firebase';
-import { v4 as uuidv4 } from 'uuid';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { collection, addDoc, Timestamp, doc, getDoc } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { db } from "../firebase/firebase";
+import { v4 as uuidv4 } from "uuid";
 
 const WalkRequestForm = () => {
     const [form, setForm] = useState({
-        date: '',
-        time: '',
-        durationMinutes: 30,
-        content: '',
-        location: '',
-        participantsLimit: '',
+        title: "",
+        content: "",
+        location: "",
+        date: "",
+        time: "",
     });
     const [loading, setLoading] = useState(false);
-
-    const navigate = useNavigate();
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -30,204 +26,191 @@ const WalkRequestForm = () => {
         const auth = getAuth();
         const user = auth.currentUser;
         if (!user) {
-            alert('ログインが必要です');
+            alert("ログインが必要です");
             setLoading(false);
             return;
         }
 
         try {
-            const userDocRef = doc(db, 'users', user.uid);
+            const userDocRef = doc(db, "users", user.uid);
             const userDocSnap = await getDoc(userDocRef);
-            const username = userDocSnap.exists() ? userDocSnap.data().username : '匿名';
 
-            const [year, month, day] = form.date.split('-');
-            const [hour, minute] = form.time.split(':');
-            const startTime = new Date(year, month - 1, day, hour, minute);
+            if (!userDocSnap.exists()) throw new Error("ユーザーデータが見つかりません");
 
-            const durationHours = Number(form.durationMinutes) / 60;
-            const participantsLimit = form.participantsLimit ? Number(form.participantsLimit) : null;
-            const roomId = uuidv4();
+            const userData = userDocSnap.data();
 
-            await addDoc(collection(db, 'walkRequests'), {
+            const username = userData.owner?.username || userData.displayName || "匿名";
+            const petData = {
+                name: userData.pet?.petName || "不明",
+                breed: userData.pet?.breed || "不明",
+                age: userData.pet?.petAge || "?",
+                gender: userData.pet?.petGender || "?",
+                image: userData.pet?.petImageURL || "",
+            };
+
+            await addDoc(collection(db, "walkRequests"), {
                 uid: user.uid,
-                username,
-                startTime: Timestamp.fromDate(startTime),
-                durationHours,
-                format: 'walk',
+                username: userData.owner?.username || userData.displayName || "匿名",
+                title: form.title,
                 content: form.content,
+                pet: petData,
                 location: form.location,
-                participantsLimit,
+                datetime:
+                    form.date && form.time
+                        ? Timestamp.fromDate(new Date(`${form.date}T${form.time}:00`))
+                        : null,
                 createdAt: Timestamp.now(),
-                participants: [],
-                pendingRequests: [],
-                roomId: roomId,
+                status: "open",
+                applicants: [],
+                roomId: uuidv4(),
             });
 
-            // フォーム初期化
+
             setForm({
-                date: '',
-                time: '',
-                durationMinutes: 30,
-                content: '',
-                location: '',
-                participantsLimit: '',
+                title: "",
+                content: "",
+                location: "",
+                date: "",
+                time: "",
             });
 
-            // WalkList に遷移
-            navigate('/home/WalkList');
+            window.location.href = "/home/WalkList";
         } catch (error) {
             console.error(error);
-            alert('投稿に失敗しました。もう一度お試しください。');
+            alert("投稿に失敗しました。");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="container mt-4">
+        <div className="container my-5">
             <style>{`
-                /* タイトル */
-                .form-title {
-                    font-size: clamp(1.5rem, 4vw, 2rem);
-                    text-align: center;
-                    margin-bottom: 1.5rem;
-                }
-
-                /* カードフォーム */
                 .walk-form {
-                    background-color: #fdfcf7;
-                    max-width: 600px;
+                    background-color: #fffaf3;
+                    max-width: 650px;
                     margin: 0 auto;
-                    padding: 2rem;
-                    border-radius: 1rem;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                    font-size: clamp(0.9rem, 2vw, 1rem);
+                    padding: 2.5rem;
+                    border-radius: 1.5rem;
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+                    font-size: 1rem;
                 }
-
-                .walk-form .form-label {
-                    font-weight: 500;
-                }
-
-                .walk-form .form-text {
-                    font-size: 0.85rem;
-                    color: #555;
-                }
-
-                /* ボタン */
-                .Walk-btn {
-                    background-color: #4CAF50;
-                    color: white;
+                .form-title {
+                    text-align: center;
                     font-weight: bold;
-                    font-size: clamp(1rem, 2vw, 1.1rem);
-                    padding: 0.5rem 1rem;
-                    border: none;
-                    border-radius: 0.5rem;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
+                    color: #5a452e;
+                    font-size: clamp(1.6rem, 4vw, 2.2rem);
+                    margin-bottom: 1.8rem;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 0.5rem;
                 }
-
+                .form-label {
+                    font-weight: 600;
+                    color: #3f3b36;
+                }
+                .form-control {
+                    border: 1px solid #d5c9b8;
+                    border-radius: 0.5rem;
+                    padding: 0.6rem 0.9rem;
+                    transition: all 0.2s ease;
+                }
+                .form-control:focus {
+                    border-color: #86b97e;
+                    box-shadow: 0 0 0 3px rgba(134, 185, 126, 0.25);
+                }
+                .Walk-btn {
+                    background: linear-gradient(135deg, #8bc34a, #6da73b);
+                    color: #fff;
+                    font-weight: 600;
+                    font-size: 1.1rem;
+                    border: none;
+                    border-radius: 0.7rem;
+                    padding: 0.7rem;
+                    transition: all 0.3s ease;
+                }
+                .Walk-btn:hover:not(:disabled) {
+                    background: linear-gradient(135deg, #7bb041, #5d8f33);
+                    transform: translateY(-1px);
+                }
                 .Walk-btn:disabled {
-                    background-color: #9cd4a3;
+                    background: #bcd5a0;
                     cursor: not-allowed;
                 }
-
-                .Walk-btn:hover:not(:disabled) {
-                    background-color: #45a049;
-                }
-
-                /* スマホ対応 */
-                @media (max-width: 576px) {
-                    .walk-form {
-                        padding: 1.5rem 1rem;
-                    }
+                .note-text {
+                    font-size: 0.9rem;
+                    color: #7d756b;
                 }
             `}</style>
 
-            <h2 className="form-title">散歩リクエスト投稿</h2>
+            <h2 className="form-title">🐾 ペット掲示板に投稿する</h2>
 
             <form className="walk-form" onSubmit={handleSubmit}>
-                <div className="mb-3">
-                    <label className="form-label">日付</label>
-                    <input
-                        type="date"
-                        className="form-control"
-                        name="date"
-                        value={form.date}
-                        onChange={handleChange}
-                        required
-                    />
-                </div>
-
-                <div className="mb-3">
-                    <label className="form-label">開始時間</label>
-                    <input
-                        type="time"
-                        className="form-control"
-                        name="time"
-                        value={form.time}
-                        onChange={handleChange}
-                        required
-                    />
-                </div>
-
-                <div className="mb-3">
-                    <label className="form-label">所要時間（分単位）</label>
-                    <input
-                        type="number"
-                        className="form-control"
-                        name="durationMinutes"
-                        min="10"
-                        step="10"
-                        value={form.durationMinutes}
-                        onChange={handleChange}
-                        required
-                    />
-                    <small className="form-text">※ 例：30分、60分、90分など</small>
-                </div>
-
-                <div className="mb-3">
-                    <label className="form-label">散歩の内容</label>
+                <div className="mb-4">
+                    <label className="form-label">タイトル</label>
                     <input
                         type="text"
                         className="form-control"
-                        name="content"
-                        value={form.content}
+                        name="title"
+                        value={form.title}
                         onChange={handleChange}
-                        placeholder="例）犬と一緒に公園を散歩"
+                        placeholder="例）一緒にお散歩できる友達を募集！"
                         required
                     />
                 </div>
 
-                <div className="mb-3">
-                    <label className="form-label">集合場所</label>
+                <div className="mb-4">
+                    <label className="form-label">募集内容</label>
+                    <textarea
+                        className="form-control"
+                        name="content"
+                        rows="4"
+                        value={form.content}
+                        onChange={handleChange}
+                        placeholder="例）トイプードル（3歳・♀）です。〇〇公園で一緒に遊んでくれるお友達を探しています！"
+                        required
+                    ></textarea>
+                </div>
+
+                <div className="mb-4">
+                    <label className="form-label">場所</label>
                     <input
                         type="text"
                         className="form-control"
                         name="location"
                         value={form.location}
                         onChange={handleChange}
-                        placeholder="例）〇〇公園入口"
-                        required
+                        placeholder="例）神戸市中央区 〇〇公園"
                     />
+                    <small className="note-text">※具体的な地名を入力するとマッチングしやすくなります</small>
                 </div>
 
-                <div className="mb-3">
-                    <label className="form-label">参加人数上限</label>
-                    <input
-                        type="number"
-                        className="form-control"
-                        name="participantsLimit"
-                        min="1"
-                        step="1"
-                        value={form.participantsLimit}
-                        onChange={handleChange}
-                        placeholder="例）3"
-                    />
-                    <small className="form-text">※ 空欄なら制限なし</small>
+                <div className="mb-4 d-flex flex-column flex-md-row gap-3">
+                    <div className="flex-fill">
+                        <label className="form-label">日付（任意）</label>
+                        <input
+                            type="date"
+                            className="form-control"
+                            name="date"
+                            value={form.date}
+                            onChange={handleChange}
+                        />
+                    </div>
+                    <div className="flex-fill">
+                        <label className="form-label">時間（任意）</label>
+                        <input
+                            type="time"
+                            className="form-control"
+                            name="time"
+                            value={form.time}
+                            onChange={handleChange}
+                        />
+                    </div>
                 </div>
 
                 <button type="submit" className="Walk-btn w-100" disabled={loading}>
-                    {loading ? '投稿中...' : 'リクエストを投稿'}
+                    {loading ? "投稿中..." : "🐕 掲示板に投稿する"}
                 </button>
             </form>
         </div>

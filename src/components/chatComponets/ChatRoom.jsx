@@ -25,7 +25,6 @@ const ChatRoom = () => {
   const [userName, setUserName] = useState('匿名');
   const [otherUserName, setOtherUserName] = useState('');
   const bottomRef = useRef(null);
-
   const [sending, setSending] = useState(false);
 
   // メッセージ取得＆既読処理（最大50件取得）
@@ -42,7 +41,7 @@ const ChatRoom = () => {
       const msgData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgData);
 
-      // 既読処理（必要ならバッチ化検討）
+      // 既読処理
       snapshot.docs.forEach(async (docSnap) => {
         const msg = docSnap.data();
         const isMyMessage = msg.uid === currentUser.uid;
@@ -66,7 +65,8 @@ const ChatRoom = () => {
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userSnap = await getDoc(userDocRef);
         if (userSnap.exists()) {
-          setUserName(userSnap.data().username || '匿名');
+          // owner.username に対応
+          setUserName(userSnap.data().owner?.username || '匿名');
         }
       }
     };
@@ -89,7 +89,8 @@ const ChatRoom = () => {
           const userDocRef = doc(db, 'users', otherUid);
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists()) {
-            setOtherUserName(userSnap.data().username || '相手ユーザー');
+            // owner.username に対応
+            setOtherUserName(userSnap.data().owner?.username || '相手ユーザー');
           }
         }
       }
@@ -103,7 +104,7 @@ const ChatRoom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 送信処理（Firestore送信完了後に画面更新）
+  // メッセージ送信処理
   const handleSend = async () => {
     if (sending) return;
     if (!text.trim()) return;
@@ -195,7 +196,7 @@ const ChatRoom = () => {
       {/* ヘッダー */}
       <div
         className="shadow-sm px-4 py-3 border-bottom d-flex align-items-center"
-        style={{ flexShrink: 0, }}
+        style={{ flexShrink: 0 }}
       >
         <button
           className="btn Chat-btn2 border rounded-circle d-flex align-items-center justify-content-center me-3"
@@ -210,7 +211,10 @@ const ChatRoom = () => {
       </div>
 
       {/* メッセージエリア */}
-      <div className="flex-grow-1 overflow-auto px-3 py-3" style={{ minHeight: 0 , backgroundColor: '#faf7ee'}}>
+      <div
+        className="flex-grow-1 overflow-auto px-3 py-3"
+        style={{ minHeight: 0, backgroundColor: '#faf7ee' }}
+      >
         {groupedMessages.map(([dateKey, msgs]) => (
           <div key={dateKey} className="mb-4">
             <div className="text-center text-muted mb-3">{formatDateHeader(dateKey)}</div>
@@ -218,22 +222,21 @@ const ChatRoom = () => {
               const isMyMessage = msg.uid === currentUser?.uid;
               const time = msg.timestamp?.toDate
                 ? msg.timestamp.toDate().toLocaleTimeString('ja-JP', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
                 : msg.timestamp instanceof Date
-                ? msg.timestamp.toLocaleTimeString('ja-JP', {
+                  ? msg.timestamp.toLocaleTimeString('ja-JP', {
                     hour: '2-digit',
                     minute: '2-digit',
                   })
-                : '';
+                  : '';
 
               return (
                 <div
                   key={msg.id}
-                  className={`d-flex mb-2 ${
-                    isMyMessage ? 'justify-content-end' : 'justify-content-start'
-                  }`}
+                  className={`d-flex mb-2 ${isMyMessage ? 'justify-content-end' : 'justify-content-start'
+                    }`}
                 >
                   {!isMyMessage ? (
                     <div className="d-flex mb-2">
@@ -300,7 +303,7 @@ const ChatRoom = () => {
       </div>
 
       {/* 入力欄 */}
-      <div className="px-3 py-2 border-top bg-light" style={{ flexShrink: 0 ,}}>
+      <div className="px-3 py-2 border-top bg-light" style={{ flexShrink: 0 }}>
         <div className="d-flex gap-2">
           <input
             type="text"

@@ -1,176 +1,303 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
     collection,
-    doc,
-    updateDoc,
-    arrayUnion,
     onSnapshot,
-    addDoc,
-    serverTimestamp,
-} from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { db } from '../firebase/firebase';
-import { format } from 'date-fns';
-import ja from 'date-fns/locale/ja';
-import { useNavigate } from 'react-router-dom';
-import { FaPaw, FaPlus } from 'react-icons/fa';
-
+    updateDoc,
+    doc,
+    arrayUnion,
+    arrayRemove,
+    getDoc,
+} from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { db } from "../firebase/firebase";
+import { format } from "date-fns";
+import ja from "date-fns/locale/ja";
+import { useNavigate } from "react-router-dom";
+import {
+    FaPaw,
+    FaPlus,
+    FaHeart,
+    FaRegHeart,
+    FaComment,
+    FaPaperPlane,
+} from "react-icons/fa";
 
 const WalkList = () => {
     const [walks, setWalks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [commentInputs, setCommentInputs] = useState({});
+    const [currentUserData, setCurrentUserData] = useState(null);
     const auth = getAuth();
-    const user = auth.currentUser;
     const navigate = useNavigate();
 
-    // Firestore から散歩リクエスト一覧を取得
     useEffect(() => {
-        if (!user) return;
+        const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                setWalks([]);
+                setCurrentUserData(null);
+                setLoading(false);
+                return;
+            }
 
-        const unsubscribe = onSnapshot(collection(db, 'walkRequests'), (snapshot) => {
-            const list = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            list.sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
-            setWalks(list);
+            try {
+                const userDocSnap = await getDoc(doc(db, "users", user.uid));
+                const userData = userDocSnap.exists() ? userDocSnap.data() : {};
+                setCurrentUserData(userData);
+            } catch (err) {
+                console.error("ユーザー情報取得エラー:", err);
+                setCurrentUserData(null);
+            }
+
+            const unsubscribeSnapshot = onSnapshot(
+                collection(db, "walkRequests"),
+                async (snapshot) => {
+                    const now = new Date();
+                    const walkDocs = snapshot.docs
+                        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+                        .filter((walk) => walk.uid !== user.uid)
+                        .filter(
+                            (walk) =>
+                                walk.datetime?.toDate && walk.datetime.toDate() > now
+                        )
+                        .sort((a, b) => a.datetime.toDate() - b.datetime.toDate());
+
+                    const walkData = [];
+                    for (const walk of walkDocs) {
+                        try {
+                            const userDocSnap = await getDoc(doc(db, "users", walk.uid));
+                            const userData = userDocSnap.exists() ? userDocSnap.data() : {};
+                            walkData.push({
+                                ...walk,
+                                owner: {
+                                    username: userData.owner?.username || walk.username || "飼い主",
+                                    ownerImageURL: userData.owner?.ownerImageURL || "",
+                                },
+                                pet: {
+                                    petName: userData.pet?.petName || walk.pet?.petName || "名無し",
+                                    petBreed:
+                                        userData.pet?.breed || walk.pet?.petBreed || "犬種不明",
+                                    petAge: userData.pet?.petAge || walk.pet?.petAge || "?",
+                                    petGender:
+                                        userData.pet?.petGender || walk.pet?.petGender || "不明",
+                                },
+                            });
+                        } catch (err) {
+                            walkData.push(walk);
+                        }
+                    }
+                    setWalks(walkData);
+                    setLoading(false);
+                }
+            );
+            return () => unsubscribeSnapshot();
         });
 
-        return () => unsubscribe();
-    }, [user]);
+        return () => unsubscribeAuth();
+    }, [auth]);
 
-    // 参加申請
-    const handleApply = async (request) => {
-        if (!user) return alert('ログインしてください');
-        const userId = user.uid;
+    const toggleLike = async (walkId, likes = []) => {
+        const user = auth.currentUser;
+        if (!user) return alert("ログインが必要です");
 
-        if (request.pendingRequests?.includes(userId) || request.participants?.includes(userId)) {
-            alert('既に申請済み、または参加済みです');
-            return;
+        const ref = doc(db, "walkRequests", walkId);
+        try {
+            if (likes.includes(user.uid)) {
+                await updateDoc(ref, { likes: arrayRemove(user.uid) });
+            } else {
+                await updateDoc(ref, { likes: arrayUnion(user.uid) });
+            }
+        } catch (err) {
+            console.error("いいね更新エラー:", err);
         }
-
-        const requestRef = doc(db, 'walkRequests', request.id);
-        await updateDoc(requestRef, {
-            pendingRequests: arrayUnion(userId),
-        });
-
-        await addDoc(collection(db, 'notifications'), {
-            to: request.uid,
-            from: userId,
-            requestId: request.id,
-            type: 'apply_walk',
-            read: false,
-            timestamp: serverTimestamp(),
-            message: `${request.username || '匿名'}さんがあなたの散歩リクエストに参加申請しました。`,
-        });
     };
 
-    const renderStatus = (request) => {
-        if (!user) return 'ログインしてください';
-        const userId = user.uid;
-        if (request.participants?.includes(userId)) return '承認済み';
-        if (request.pendingRequests?.includes(userId)) return '承認待ち';
-        return '申請可能';
+    const addComment = async (walkId) => {
+        const user = auth.currentUser;
+        if (!user) return alert("ログインが必要です");
+        const text = commentInputs[walkId]?.trim();
+        if (!text) return;
+
+        try {
+            const ref = doc(db, "walkRequests", walkId);
+            await updateDoc(ref, {
+                comments: arrayUnion({
+                    uid: user.uid,
+                    username: currentUserData?.owner?.username || "匿名ユーザー",
+                    text,
+                    createdAt: new Date(),
+                }),
+            });
+            setCommentInputs((prev) => ({ ...prev, [walkId]: "" }));
+        } catch (err) {
+            alert("コメントの送信に失敗しました");
+        }
     };
+
+    if (loading) return <p className="text-center mt-5">読み込み中...</p>;
 
     return (
-        <div className="container py-4" style={{ maxWidth: 900 }}>
-            <div className="d-flex justify-content-between align-items-center mb-3 mb-md-4">
-                <h2 className="fw-bold m-0" style={{ fontSize: '1.6rem', letterSpacing: '0.05em' }}>
-                    散歩の掲示板 <FaPaw className="text-warning ms-2" />
-                </h2>
-                <button
-                    className="btn WalkList-btn d-flex align-items-center"
-                    style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
-                    onClick={() => navigate('/home/walkRequest')}
-                >
-                    <FaPlus className="me-2" /> 新規投稿
-                </button>
-            </div>
-
-            {walks.length === 0 ? (
-                <p className="text-muted text-center mt-5" style={{ fontSize: '0.9rem' }}>
-                    散歩の募集がありません
-                </p>
-            ) : (
-                <div className="row row-cols-1 row-cols-md-2 g-3 g-md-4">
-                    {walks
-                        .filter((req) => req.uid !== user.uid)
-                        .filter((req) => req.startTime.toDate() > new Date())
-                        .filter((req) => !req.participants?.includes(user.uid))
-                        .map((req) => {
-                            const status = renderStatus(req);
-                            const isApplyEnabled = status === '申請可能';
-
-                            return (
-                                <div key={req.id} className="col">
-                                    <div className="card h-100 border-0 shadow rounded-4">
-                                        <div className="card-body d-flex flex-column p-3 p-md-4">
-                                            <h5
-                                                className="WalkList-Name card-title fw-bold mb-2 mb-md-3"
-                                                role="button"
-                                                onClick={() => navigate(`/home/profile/${req.uid}`)}
-                                                style={{ cursor: 'pointer', userSelect: 'none', fontSize: '1rem' }}
-                                                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-                                                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-                                            >
-                                                {req.username || '匿名'}
-                                            </h5>
-
-                                            <p className="card-text text-muted mb-1 small" style={{ fontSize: '0.8rem' }}>
-                                                🕒 {format(req.startTime.toDate(), 'M月d日(EEE) HH:mm', { locale: ja })} 〜{' '}
-                                                {Math.round(req.durationHours * 60)}分
-                                            </p>
-
-                                            <p className="card-text text-muted mb-2 small" style={{ fontSize: '0.8rem' }}>
-                                                🐶 {req.location || '場所未設定'} / {req.comment || '詳細なし'}
-                                            </p>
-
-                                            <div className="mt-auto text-end">
-                                                {isApplyEnabled ? (
-                                                    <button
-                                                        className="btn WalkList-btn btn-primary btn-sm px-3 px-md-4 rounded-pill"
-                                                        style={{ fontSize: '0.8rem' }}
-                                                        onClick={() => handleApply(req)}
-                                                    >
-                                                        参加申請
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        className={`btn my-btn btn-sm px-3 px-md-4 rounded-pill ${status === '承認済み' ? 'btn-success' : 'btn-secondary'
-                                                            }`}
-                                                        style={{ fontSize: '0.8rem' }}
-                                                        disabled
-                                                    >
-                                                        {status}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                </div>
-            )}
-
+        <div className="walk-board container py-3">
+            {/* 内部CSS（コンポーネント内で完結） */}
             <style>{`
-                .card-title:hover {
-                    color: #0d6efd;
+                .walk-board {
+                    background-color: #f8f9fa;
+                    min-height: 100vh;
                 }
-
-                @media (max-width: 575.98px) {
-                    .card-title {
-                        font-size: 0.95rem;
-                    }
-                    .card-text {
-                        font-size: 0.75rem;
-                    }
-                    .btn {
-                        font-size: 0.75rem;
-                        padding: 0.3rem 0.6rem;
-                    }
+                .walk-post {
+                    background-color: #ffffff;
+                    border: 1px solid #e6e6e6;
+                    border-radius: 1rem;
+                    transition: transform 0.15s ease, box-shadow 0.15s ease;
+                }
+                .walk-post:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                }
+                .owner-img {
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    cursor: pointer;
+                    border: 1px solid #ddd;
+                }
+                .walk-body {
+                    border-left: 3px solid #ffc107;
+                    background-color: #fcfcfc;
+                }
+                .walk-comments {
+                    font-size: 0.85rem;
+                    background-color: #fdfdfd;
+                    border-left: 2px solid #007bff;
+                }
+                .comment-item strong {
+                    color: #007bff;
+                }
+                .comment-input input:focus {
+                    outline: none;
+                    box-shadow: none;
+                }
+                .new-post-btn {
+                    position: fixed;
+                    bottom: 2rem;
+                    right: 2rem;
+                    width: 3.2rem;
+                    height: 3.2rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1.2rem;
+                    border-radius: 50%;
                 }
             `}</style>
+
+            <div className="d-flex align-items-center justify-content-between mb-4">
+                <h2 className="fw-bold text-primary d-flex align-items-center">
+                    <FaPaw className="text-warning me-2" /> 散歩の掲示板
+                </h2>
+            </div>
+
+            {walks.length === 0 && <p className="text-center text-muted">投稿がありません</p>}
+
+            <div className="walk-list">
+                {walks.map((walk) => {
+                    const user = auth.currentUser;
+                    const isLiked = walk.likes?.includes(user?.uid);
+                    const postTime = walk.createdAt?.toDate
+                        ? format(walk.createdAt.toDate(), "MM/dd HH:mm", { locale: ja })
+                        : "日時不明";
+
+                    return (
+                        <div className="walk-post mb-4 p-3" key={walk.id}>
+                            <div className="walk-header d-flex align-items-center mb-2">
+                                <img
+                                    src={walk.owner?.ownerImageURL || "/default-icon.png"}
+                                    alt="owner"
+                                    className="owner-img me-2"
+                                    onClick={() => navigate(`/home/profile/${walk.uid}`)}
+                                />
+                                <div>
+                                    <h6
+                                        className="fw-bold m-0"
+                                        onClick={() => navigate(`/home/profile/${walk.uid}`)}
+                                        style={{ cursor: "pointer" }}
+                                    >
+                                        {walk.owner?.username}
+                                    </h6>
+                                    <small className="text-muted">
+                                        {walk.pet?.petBreed}「{walk.pet?.petName}」 ({walk.pet?.petAge}歳)
+                                    </small>
+                                </div>
+                                <span className="ms-auto text-muted small">{postTime}</span>
+                            </div>
+
+                            <div className="walk-body p-3 rounded mb-2">
+                                <h5 className="fw-bold text-dark mb-1">{walk.title}</h5>
+                                <p className="m-0" style={{ whiteSpace: "pre-line" }}>
+                                    {walk.content}
+                                </p>
+                            </div>
+
+                            <div className="walk-footer d-flex align-items-center">
+                                <button
+                                    className="btn btn-sm d-flex align-items-center me-3"
+                                    onClick={() => toggleLike(walk.id, walk.likes)}
+                                    style={{ border: "none", background: "transparent" }}
+                                >
+                                    {isLiked ? (
+                                        <FaHeart className="text-danger me-1" />
+                                    ) : (
+                                        <FaRegHeart className="text-secondary me-1" />
+                                    )}
+                                    <span>{walk.likes?.length || 0}</span>
+                                </button>
+                                <FaComment className="text-secondary me-1" />
+                                <span>{walk.comments?.length || 0}</span>
+                            </div>
+
+                            {walk.comments?.length > 0 && (
+                                <div className="walk-comments mt-2 p-2 rounded bg-white border">
+                                    {walk.comments.map((c, i) => (
+                                        <div key={i} className="comment-item mb-1 small">
+                                            <strong>{c.username}</strong>：{c.text}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="comment-input d-flex align-items-center mt-2 bg-light rounded-pill px-2">
+                                <input
+                                    type="text"
+                                    className="form-control form-control-sm border-0 bg-light"
+                                    placeholder="コメントを入力..."
+                                    value={commentInputs[walk.id] || ""}
+                                    onChange={(e) =>
+                                        setCommentInputs((prev) => ({
+                                            ...prev,
+                                            [walk.id]: e.target.value,
+                                        }))
+                                    }
+                                />
+                                <button
+                                    className="btn text-primary"
+                                    onClick={() => addComment(walk.id)}
+                                    style={{ border: "none", background: "transparent" }}
+                                >
+                                    <FaPaperPlane />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* 📍 右下固定の新規投稿ボタン */}
+            <button
+                className="btn btn-primary shadow-lg new-post-btn"
+                onClick={() => navigate("/home/walkRequest")}
+            >
+                <FaPlus />
+            </button>
         </div>
     );
 };
