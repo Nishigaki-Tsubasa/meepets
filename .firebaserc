@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "food-14cb5"
-  }
+    "default": "dog-app-4cb10"
+  },
+  "targets": {},
+  "etags": {}
 }

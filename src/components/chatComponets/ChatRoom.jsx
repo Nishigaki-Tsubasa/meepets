@@ -13,8 +13,8 @@ import {
   updateDoc,
   limit,
 } from 'firebase/firestore';
-
 import '../../styles/ChatRoom.css';
+import { FaVideo } from 'react-icons/fa';
 
 const ChatRoom = () => {
   const { roomId } = useParams();
@@ -24,10 +24,11 @@ const ChatRoom = () => {
   const [text, setText] = useState('');
   const [userName, setUserName] = useState('匿名');
   const [otherUserName, setOtherUserName] = useState('');
+  const [jitsiRoomId, setJitsiRoomId] = useState('');
   const bottomRef = useRef(null);
   const [sending, setSending] = useState(false);
 
-  // メッセージ取得＆既読処理（最大50件取得）
+  // メッセージ取得＆既読処理
   useEffect(() => {
     if (!roomId || !currentUser) return;
 
@@ -41,7 +42,6 @@ const ChatRoom = () => {
       const msgData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgData);
 
-      // 既読処理
       snapshot.docs.forEach(async (docSnap) => {
         const msg = docSnap.data();
         const isMyMessage = msg.uid === currentUser.uid;
@@ -65,7 +65,6 @@ const ChatRoom = () => {
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userSnap = await getDoc(userDocRef);
         if (userSnap.exists()) {
-          // owner.username に対応
           setUserName(userSnap.data().owner?.username || '匿名');
         }
       }
@@ -73,7 +72,7 @@ const ChatRoom = () => {
     fetchUsername();
   }, [currentUser]);
 
-  // 相手の名前を取得
+  // 相手の名前と Jitsi Room ID を取得
   useEffect(() => {
     const fetchOtherUserName = async () => {
       if (!roomId || !currentUser) return;
@@ -84,12 +83,14 @@ const ChatRoom = () => {
       if (roomSnap.exists()) {
         const members = roomSnap.data().members || [];
         const otherUid = members.find((uid) => uid !== currentUser.uid);
+        const roomIdFromDB = roomSnap.data().jitsiRoomId || '';
+
+        setJitsiRoomId(roomIdFromDB); // state に保存
 
         if (otherUid) {
           const userDocRef = doc(db, 'users', otherUid);
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists()) {
-            // owner.username に対応
             setOtherUserName(userSnap.data().owner?.username || '相手ユーザー');
           }
         }
@@ -104,14 +105,9 @@ const ChatRoom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // メッセージ送信処理
+  // メッセージ送信
   const handleSend = async () => {
-    if (sending) return;
-    if (!text.trim()) return;
-    if (!currentUser) {
-      alert('ログインが必要です');
-      return;
-    }
+    if (sending || !text.trim() || !currentUser) return;
 
     setSending(true);
     try {
@@ -138,31 +134,19 @@ const ChatRoom = () => {
   };
 
   // メッセージを日付ごとにグループ化
-  function groupMessagesByDate(messages) {
+  const groupMessagesByDate = (messages) => {
     const groups = {};
-
     messages.forEach((msg) => {
       if (!msg.timestamp?.seconds && !(msg.timestamp instanceof Date)) return;
-      let dateObj;
-      if (msg.timestamp?.seconds) {
-        dateObj = new Date(msg.timestamp.seconds * 1000);
-      } else if (msg.timestamp instanceof Date) {
-        dateObj = msg.timestamp;
-      } else {
-        return;
-      }
+      const dateObj = msg.timestamp?.seconds ? new Date(msg.timestamp.seconds * 1000) : msg.timestamp;
       const key = dateObj.toISOString().split('T')[0];
-      if (!groups[key]) {
-        groups[key] = [];
-      }
+      if (!groups[key]) groups[key] = [];
       groups[key].push(msg);
     });
-
     return Object.entries(groups).sort((a, b) => (a[0] > b[0] ? 1 : -1));
-  }
+  };
 
-  // 日付見出しの表示調整
-  function formatDateHeader(dateString) {
+  const formatDateHeader = (dateString) => {
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
@@ -187,124 +171,129 @@ const ChatRoom = () => {
       month: 'long',
       day: 'numeric',
     });
-  }
+  };
 
   const groupedMessages = groupMessagesByDate(messages);
 
   return (
-    <div className="container-fluid d-flex flex-column p-0 bg-light" style={{ height: '100dvh' }}>
-      {/* ヘッダー */}
-      <div
-        className="shadow-sm px-4 py-3 border-bottom d-flex align-items-center"
-        style={{ flexShrink: 0 }}
-      >
-        <button
-          className="btn Chat-btn2 border rounded-circle d-flex align-items-center justify-content-center me-3"
-          style={{ width: '40px', height: '40px' }}
-          onClick={() => navigate('/home/chat')}
-          title="戻る"
-          disabled={sending}
+    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f0f0f0' }}>
+      {/* チャットエリア */}
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* ヘッダー固定 */}
+        <div
+          className="shadow-sm px-4 py-3 border-bottom d-flex align-items-center"
+          style={{ position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 10 }}
         >
-          <i className="bi bi-arrow-left-short fs-4" />
-        </button>
-        <h5 className="mb-0">{otherUserName || '相手ユーザー'}</h5>
-      </div>
+          <button
+            className="btn Chat-btn2 border rounded-circle d-flex align-items-center justify-content-center me-3"
+            style={{ width: '40px', height: '40px' }}
+            onClick={() => navigate('/home/chat')}
+            title="戻る"
+            disabled={sending}
+          >
+            <i className="bi bi-arrow-left-short fs-4" />
+          </button>
+          <h5 className="mb-0">{otherUserName || '相手ユーザー'}</h5>
 
-      {/* メッセージエリア */}
-      <div
-        className="flex-grow-1 overflow-auto px-3 py-3"
-        style={{ minHeight: 0, backgroundColor: '#faf7ee' }}
-      >
-        {groupedMessages.map(([dateKey, msgs]) => (
-          <div key={dateKey} className="mb-4">
-            <div className="text-center text-muted mb-3">{formatDateHeader(dateKey)}</div>
-            {msgs.map((msg) => {
-              const isMyMessage = msg.uid === currentUser?.uid;
-              const time = msg.timestamp?.toDate
-                ? msg.timestamp.toDate().toLocaleTimeString('ja-JP', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-                : msg.timestamp instanceof Date
-                  ? msg.timestamp.toLocaleTimeString('ja-JP', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                  : '';
+          <button
+            className="btn MyMatched-btn w-100 mb-3 d-flex align-items-center justify-content-center gap-2 fw-semibold"
+            onClick={() => navigate(`/home/jitsi/${jitsiRoomId}`)}
+            disabled={!jitsiRoomId} // データがない場合は無効化
+          >
+            <FaVideo size={18} /> ビデオ通話へ移動
+          </button>
+        </div>
 
-              return (
-                <div
-                  key={msg.id}
-                  className={`d-flex mb-2 ${isMyMessage ? 'justify-content-end' : 'justify-content-start'
-                    }`}
-                >
-                  {!isMyMessage ? (
-                    <div className="d-flex mb-2">
-                      <div className="me-2" style={{ width: 40, flexShrink: 0 }}>
-                        <i className="bi bi-person-circle fs-3" style={{ color: '#4f4f4fff' }}></i>
+        {/* メッセージ表示 */}
+        <div
+          style={{
+            flexGrow: 1,
+            overflowY: 'auto',
+            padding: '8px 16px',
+            backgroundColor: '#faf7ee',
+          }}
+        >
+          {groupedMessages.map(([dateKey, msgs]) => (
+            <div key={dateKey} className="mb-4">
+              <div className="text-center text-muted mb-3">{formatDateHeader(dateKey)}</div>
+              {msgs.map((msg) => {
+                const isMyMessage = msg.uid === currentUser?.uid;
+                const time = msg.timestamp?.toDate
+                  ? msg.timestamp.toDate().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                  : msg.timestamp instanceof Date
+                    ? msg.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                    : '';
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`d-flex mb-2 ${isMyMessage ? 'justify-content-end' : 'justify-content-start'}`}
+                  >
+                    {!isMyMessage ? (
+                      <div className="d-flex mb-2">
+                        <div className="me-2" style={{ width: 40, flexShrink: 0 }}>
+                          <i className="bi bi-person-circle fs-3" style={{ color: '#4f4f4fff' }}></i>
+                        </div>
+                        <div>
+                          <div
+                            className="rounded-4 shadow-sm px-3 py-2 chat-bubble"
+                            style={{
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              marginTop: 5,
+                              maxWidth: '60vw',
+                              backgroundColor: '#fff',
+                              color: '#333',
+                            }}
+                          >
+                            {msg.text}
+                          </div>
+                          <div className="text-muted small" style={{ fontSize: '0.7rem', marginTop: 2, marginLeft: 8 }}>
+                            {time}
+                          </div>
+                        </div>
                       </div>
-                      <div>
+                    ) : (
+                      <div className="text-end">
                         <div
-                          className="rounded-4 shadow-sm px-3 py-2 chat-bubble"
+                          className="rounded-4 shadow-sm text-white px-3 py-2 chat-bubble"
                           style={{
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
-                            marginTop: 5,
                             maxWidth: '60vw',
-                            backgroundColor: '#faf7ee',
-                            color: '#573939ff',
-                            fontweight: 'bold',
+                            backgroundColor: '#ff6f61',
+                            color: '#fff',
                           }}
                         >
                           {msg.text}
                         </div>
-                        <div
-                          className="text-muted small chat-time"
-                          style={{ fontSize: '0.7rem', marginTop: 2, marginLeft: 8 }}
-                        >
+                        <div className="text-muted small" style={{ fontSize: '0.7rem', marginTop: 2 }}>
                           {time}
                         </div>
+                        <div className="text-muted small" style={{ fontSize: '0.7rem' }}>
+                          {msg.readBy?.length > 1 ? '既読' : '未読'}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="text-end">
-                      <div
-                        className="rounded-4 shadow-sm text-white px-3 py-2 chat-bubble"
-                        style={{
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          maxWidth: '60vw',
-                          backgroundColor: '#ff6f61',
-                          color: '#FFFFFF',
-                        }}
-                      >
-                        {msg.text}
-                      </div>
-                      <div
-                        className="text-muted small chat-time"
-                        style={{ fontSize: '0.7rem', marginTop: 2, marginLeft: 4 }}
-                      >
-                        {time}
-                      </div>
-                      <div
-                        className="text-muted small"
-                        style={{ fontSize: '0.7rem', marginLeft: 4 }}
-                      >
-                        {msg.readBy?.length > 1 ? '既読' : '未読'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
 
-      {/* 入力欄 */}
-      <div className="px-3 py-2 border-top bg-light" style={{ flexShrink: 0 }}>
-        <div className="d-flex gap-2">
+        {/* 入力欄固定 */}
+        <div
+          style={{
+            flexShrink: 0,
+            padding: '8px 16px',
+            borderTop: '1px solid #ddd',
+            backgroundColor: '#fff',
+            display: 'flex',
+            gap: '8px',
+          }}
+        >
           <input
             type="text"
             className="form-control rounded-pill"
@@ -314,17 +303,16 @@ const ChatRoom = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                if (!sending) handleSend();
+                handleSend();
               }
             }}
             style={{ flexGrow: 1, minWidth: 0 }}
             disabled={sending}
           />
           <button
-            className="btn Chat-btn btn-success rounded-pill d-flex align-items-center justify-content-center"
+            className="btn btn-success rounded-pill"
+            style={{ minWidth: '70px' }}
             onClick={handleSend}
-            style={{ minWidth: '70px', padding: '0 16px' }}
-            aria-label="送信"
             disabled={sending}
           >
             送信

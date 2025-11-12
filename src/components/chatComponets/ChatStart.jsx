@@ -2,12 +2,16 @@ import React, { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../firebase/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
+
 
 const ChatStart = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const currentUser = auth.currentUser;
   const hasRun = useRef(false); // 🔑 実行フラグ
+  const jitsiRoomId = uuidv4();
+
 
   useEffect(() => {
     if (hasRun.current) return; // すでに実行済みなら何もしない
@@ -46,11 +50,13 @@ const ChatStart = () => {
         return;
       }
 
+
       const newRoomRef = await addDoc(collection(db, 'chatRooms'), {
         members: [currentUser.uid, userId].sort(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         lastMessage: '',
+        jitsiRoomId: jitsiRoomId,
       });
 
       navigate(`/home/chat/${newRoomRef.id}`);

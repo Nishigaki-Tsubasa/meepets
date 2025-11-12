@@ -106,9 +106,11 @@ const UserProfilePage = () => {
                                 style={{ width: 80, height: 80, objectFit: 'cover' }}
                             />
                         ) : (
-                            <div
-                                className="rounded bg-secondary me-3"
-                                style={{ width: 80, height: 80 }}
+                            <img
+                                src={"/images.jpg"}
+                                alt="ペット"
+                                className="rounded me-3"
+                                style={{ width: 80, height: 80, objectFit: 'cover' }}
                             />
                         )}
                         <h5 className="fw-bold mb-0">{profile.pet.petName || '名無し'}</h5>

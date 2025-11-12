@@ -13,19 +13,12 @@ import { db } from "../firebase/firebase";
 import { format } from "date-fns";
 import ja from "date-fns/locale/ja";
 import { useNavigate } from "react-router-dom";
-import {
-    FaPaw,
-    FaPlus,
-    FaHeart,
-    FaRegHeart,
-    FaComment,
-    FaPaperPlane,
-} from "react-icons/fa";
+import { FaPaw, FaPlus, FaHeart, FaRegHeart, FaComment } from "react-icons/fa";
 
 const WalkList = () => {
     const [walks, setWalks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [commentInputs, setCommentInputs] = useState({});
+    const [selectedArea, setSelectedArea] = useState("");
     const [currentUserData, setCurrentUserData] = useState(null);
     const auth = getAuth();
     const navigate = useNavigate();
@@ -45,7 +38,6 @@ const WalkList = () => {
                 setCurrentUserData(userData);
             } catch (err) {
                 console.error("ユーザー情報取得エラー:", err);
-                setCurrentUserData(null);
             }
 
             const unsubscribeSnapshot = onSnapshot(
@@ -54,7 +46,7 @@ const WalkList = () => {
                     const now = new Date();
                     const walkDocs = snapshot.docs
                         .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-                        .filter((walk) => walk.uid !== user.uid)
+                        .filter((walk) => walk.uid !== auth.currentUser?.uid)
                         .filter(
                             (walk) =>
                                 walk.datetime?.toDate && walk.datetime.toDate() > now
@@ -68,17 +60,17 @@ const WalkList = () => {
                             const userData = userDocSnap.exists() ? userDocSnap.data() : {};
                             walkData.push({
                                 ...walk,
+                                prefecture: walk.prefecture || "",
+                                location: walk.location || "",
                                 owner: {
                                     username: userData.owner?.username || walk.username || "飼い主",
                                     ownerImageURL: userData.owner?.ownerImageURL || "",
                                 },
                                 pet: {
-                                    petName: userData.pet?.petName || walk.pet?.petName || "名無し",
-                                    petBreed:
-                                        userData.pet?.breed || walk.pet?.petBreed || "犬種不明",
-                                    petAge: userData.pet?.petAge || walk.pet?.petAge || "?",
-                                    petGender:
-                                        userData.pet?.petGender || walk.pet?.petGender || "不明",
+                                    petName: userData.pet?.petName || walk.pet?.name || "名無し",
+                                    petBreed: userData.pet?.breed || walk.pet?.breed || "犬種不明",
+                                    petAge: userData.pet?.petAge || walk.pet?.age || "?",
+                                    petGender: userData.pet?.petGender || walk.pet?.gender || "不明",
                                 },
                             });
                         } catch (err) {
@@ -89,16 +81,17 @@ const WalkList = () => {
                     setLoading(false);
                 }
             );
+
             return () => unsubscribeSnapshot();
         });
 
         return () => unsubscribeAuth();
     }, [auth]);
 
+    // いいね機能
     const toggleLike = async (walkId, likes = []) => {
         const user = auth.currentUser;
         if (!user) return alert("ログインが必要です");
-
         const ref = doc(db, "walkRequests", walkId);
         try {
             if (likes.includes(user.uid)) {
@@ -111,96 +104,63 @@ const WalkList = () => {
         }
     };
 
-    const addComment = async (walkId) => {
-        const user = auth.currentUser;
-        if (!user) return alert("ログインが必要です");
-        const text = commentInputs[walkId]?.trim();
-        if (!text) return;
-
-        try {
-            const ref = doc(db, "walkRequests", walkId);
-            await updateDoc(ref, {
-                comments: arrayUnion({
-                    uid: user.uid,
-                    username: currentUserData?.owner?.username || "匿名ユーザー",
-                    text,
-                    createdAt: new Date(),
-                }),
-            });
-            setCommentInputs((prev) => ({ ...prev, [walkId]: "" }));
-        } catch (err) {
-            alert("コメントの送信に失敗しました");
-        }
-    };
+    // 都道府県でフィルタリング
+    const filteredWalks = selectedArea
+        ? walks.filter((walk) => walk.prefecture === selectedArea)
+        : walks;
 
     if (loading) return <p className="text-center mt-5">読み込み中...</p>;
 
     return (
         <div className="walk-board container py-3">
-            {/* 内部CSS（コンポーネント内で完結） */}
             <style>{`
-                .walk-board {
-                    background-color: #f8f9fa;
-                    min-height: 100vh;
-                }
-                .walk-post {
-                    background-color: #ffffff;
-                    border: 1px solid #e6e6e6;
-                    border-radius: 1rem;
-                    transition: transform 0.15s ease, box-shadow 0.15s ease;
-                }
-                .walk-post:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-                }
-                .owner-img {
-                    width: 42px;
-                    height: 42px;
-                    border-radius: 50%;
-                    object-fit: cover;
-                    cursor: pointer;
-                    border: 1px solid #ddd;
-                }
-                .walk-body {
-                    border-left: 3px solid #ffc107;
-                    background-color: #fcfcfc;
-                }
-                .walk-comments {
-                    font-size: 0.85rem;
-                    background-color: #fdfdfd;
-                    border-left: 2px solid #007bff;
-                }
-                .comment-item strong {
-                    color: #007bff;
-                }
-                .comment-input input:focus {
-                    outline: none;
-                    box-shadow: none;
-                }
-                .new-post-btn {
-                    position: fixed;
-                    bottom: 2rem;
-                    right: 2rem;
-                    width: 3.2rem;
-                    height: 3.2rem;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 1.2rem;
-                    border-radius: 50%;
-                }
+                .walk-board { background-color: #f8f9fa; min-height: 100vh; }
+                .header-bar { background: rgba(255,255,255,0.6); backdrop-filter: blur(8px); border-radius: 1rem; padding: 1rem 1.5rem; box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+                .area-filter select { border-radius: 2rem; transition: all 0.2s ease; }
+                .area-filter select:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+                .walk-post { background-color: #ffffff; border: 1px solid #e6e6e6; border-radius: 1rem; transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
+                .walk-post:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                .owner-img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd; }
+                .walk-body { border-left: 3px solid #ffc107; background-color: #fcfcfc; }
+                .new-post-btn { position: fixed; bottom: 2rem; right: 2rem; width: 3.2rem; height: 3.2rem; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; border-radius: 50%; }
             `}</style>
 
-            <div className="d-flex align-items-center justify-content-between mb-4">
-                <h2 className="fw-bold text-primary d-flex align-items-center">
-                    <FaPaw className="text-warning me-2" /> 散歩の掲示板
-                </h2>
+            {/* ヘッダー */}
+            <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap header-bar">
+                <div className="d-flex align-items-center mb-2 mb-md-0">
+                    <FaPaw className="text-warning me-2 fs-3" />
+                    <h2 className="fw-bold text-primary m-0">散歩の掲示板</h2>
+                </div>
+
+                {/* 都道府県フィルター */}
+                <div className="area-filter ms-md-3 mt-2 mt-md-0">
+                    <select
+                        className="form-select shadow-sm border-0 fw-semibold"
+                        style={{ width: "200px", backgroundColor: "rgba(255,255,255,0.85)", backdropFilter: "blur(6px)" }}
+                        value={selectedArea}
+                        onChange={(e) => setSelectedArea(e.target.value)}
+                    >
+                        <option value="">すべての地域</option>
+                        {[
+                            "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+                            "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+                            "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県",
+                            "三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
+                            "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+                            "徳島県", "香川県", "愛媛県", "高知県",
+                            "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+                        ].map((pref) => (
+                            <option key={pref} value={pref}>{pref}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            {walks.length === 0 && <p className="text-center text-muted">投稿がありません</p>}
+            {/* 投稿一覧 */}
+            {filteredWalks.length === 0 && <p className="text-center text-muted">投稿がありません</p>}
 
             <div className="walk-list">
-                {walks.map((walk) => {
+                {filteredWalks.map((walk) => {
                     const user = auth.currentUser;
                     const isLiked = walk.likes?.includes(user?.uid);
                     const postTime = walk.createdAt?.toDate
@@ -208,24 +168,34 @@ const WalkList = () => {
                         : "日時不明";
 
                     return (
-                        <div className="walk-post mb-4 p-3" key={walk.id}>
+                        <div
+                            className="walk-post mb-4 p-3"
+                            key={walk.id}
+                            onClick={() => navigate(`/home/walkDetail/${walk.id}`)}
+                        >
                             <div className="walk-header d-flex align-items-center mb-2">
+                                {/* プロフィール遷移対応 */}
                                 <img
-                                    src={walk.owner?.ownerImageURL || "/default-icon.png"}
+                                    src={walk.owner?.ownerImageURL || "/images.jpg"}
                                     alt="owner"
                                     className="owner-img me-2"
-                                    onClick={() => navigate(`/home/profile/${walk.uid}`)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/home/profile/${walk.uid}`);
+
+                                    }}
+                                    style={{ cursor: "pointer" }}
                                 />
-                                <div>
-                                    <h6
-                                        className="fw-bold m-0"
-                                        onClick={() => navigate(`/home/profile/${walk.uid}`)}
-                                        style={{ cursor: "pointer" }}
-                                    >
-                                        {walk.owner?.username}
-                                    </h6>
+                                <div
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/home/profile/${walk.uid}`);
+                                    }}
+                                    style={{ cursor: "pointer" }}
+                                >
+                                    <h6 className="fw-bold m-0">{walk.owner?.username}</h6>
                                     <small className="text-muted">
-                                        {walk.pet?.petBreed}「{walk.pet?.petName}」 ({walk.pet?.petAge}歳)
+                                        {walk.pet?.petBreed}「{walk.pet?.petName}」 ({walk.pet?.petAge}歳)・{walk.prefecture} {walk.location}
                                     </small>
                                 </div>
                                 <span className="ms-auto text-muted small">{postTime}</span>
@@ -233,15 +203,16 @@ const WalkList = () => {
 
                             <div className="walk-body p-3 rounded mb-2">
                                 <h5 className="fw-bold text-dark mb-1">{walk.title}</h5>
-                                <p className="m-0" style={{ whiteSpace: "pre-line" }}>
-                                    {walk.content}
-                                </p>
+                                <p className="m-0" style={{ whiteSpace: "pre-line" }}>{walk.content}</p>
                             </div>
 
                             <div className="walk-footer d-flex align-items-center">
                                 <button
                                     className="btn btn-sm d-flex align-items-center me-3"
-                                    onClick={() => toggleLike(walk.id, walk.likes)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleLike(walk.id, walk.likes);
+                                    }}
                                     style={{ border: "none", background: "transparent" }}
                                 >
                                     {isLiked ? (
@@ -254,44 +225,12 @@ const WalkList = () => {
                                 <FaComment className="text-secondary me-1" />
                                 <span>{walk.comments?.length || 0}</span>
                             </div>
-
-                            {walk.comments?.length > 0 && (
-                                <div className="walk-comments mt-2 p-2 rounded bg-white border">
-                                    {walk.comments.map((c, i) => (
-                                        <div key={i} className="comment-item mb-1 small">
-                                            <strong>{c.username}</strong>：{c.text}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="comment-input d-flex align-items-center mt-2 bg-light rounded-pill px-2">
-                                <input
-                                    type="text"
-                                    className="form-control form-control-sm border-0 bg-light"
-                                    placeholder="コメントを入力..."
-                                    value={commentInputs[walk.id] || ""}
-                                    onChange={(e) =>
-                                        setCommentInputs((prev) => ({
-                                            ...prev,
-                                            [walk.id]: e.target.value,
-                                        }))
-                                    }
-                                />
-                                <button
-                                    className="btn text-primary"
-                                    onClick={() => addComment(walk.id)}
-                                    style={{ border: "none", background: "transparent" }}
-                                >
-                                    <FaPaperPlane />
-                                </button>
-                            </div>
                         </div>
                     );
                 })}
             </div>
 
-            {/* 📍 右下固定の新規投稿ボタン */}
+            {/* 新規投稿ボタン */}
             <button
                 className="btn btn-primary shadow-lg new-post-btn"
                 onClick={() => navigate("/home/walkRequest")}
