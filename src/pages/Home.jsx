@@ -64,9 +64,11 @@ function Home() {
 
     const menuItems = [
         { to: "/home/", icon: "bi-house-door", label: "ホーム" },
-        { to: "/home/WalkList", icon: "bi-bell", label: "散歩掲示板" },
+        {
+            to: "/home/WalkList", label: "散歩掲示板"
+        },
         { to: "/home/chat", icon: "bi-chat-dots", label: "チャット" },
-        { to: "/home/AdoptionBoard", icon: "bi-paw", label: "里親募集" },
+        { to: "/home/AdoptionBoard", label: "里親募集" },
     ];
 
     return (
@@ -97,7 +99,7 @@ function Home() {
                             alt="App Icon"
                             style={{ width: 40, height: 40, objectFit: "cover", marginRight: 8 }}
                         />
-                        <span style={{ fontWeight: "700", fontSize: "1.3rem", color: "#ff6f61" }}>meeple</span>
+                        <span style={{ fontWeight: "700", fontSize: "1.3rem", color: "#ff6f61" }}>meepets</span>
                     </div>
 
                     {/* メニュー項目（PC用） */}

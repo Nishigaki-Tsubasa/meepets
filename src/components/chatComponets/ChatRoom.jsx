@@ -85,7 +85,7 @@ const ChatRoom = () => {
         const otherUid = members.find((uid) => uid !== currentUser.uid);
         const roomIdFromDB = roomSnap.data().jitsiRoomId || '';
 
-        setJitsiRoomId(roomIdFromDB); // state に保存
+        setJitsiRoomId(roomIdFromDB);
 
         if (otherUid) {
           const userDocRef = doc(db, 'users', otherUid);
@@ -181,26 +181,40 @@ const ChatRoom = () => {
       <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         {/* ヘッダー固定 */}
         <div
-          className="shadow-sm px-4 py-3 border-bottom d-flex align-items-center"
+          className="shadow-sm px-4 py-3 border-bottom d-flex align-items-center justify-content-between"
           style={{ position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 10 }}
         >
-          <button
-            className="btn Chat-btn2 border rounded-circle d-flex align-items-center justify-content-center me-3"
-            style={{ width: '40px', height: '40px' }}
-            onClick={() => navigate('/home/chat')}
-            title="戻る"
-            disabled={sending}
-          >
-            <i className="bi bi-arrow-left-short fs-4" />
-          </button>
-          <h5 className="mb-0">{otherUserName || '相手ユーザー'}</h5>
+          <div className="d-flex align-items-center">
+            <button
+              className="btn border rounded-circle d-flex align-items-center justify-content-center me-3"
+              style={{ width: '40px', height: '40px', fontSize: '1.2rem' }}
+              onClick={() => navigate('/home/chat')}
+              title="戻る"
+              disabled={sending}
+            >
+              <i className="bi bi-arrow-left-short" />
+            </button>
+            <h5 className="mb-0">{otherUserName || '相手ユーザー'}</h5>
+          </div>
 
           <button
-            className="btn MyMatched-btn w-100 mb-3 d-flex align-items-center justify-content-center gap-2 fw-semibold"
+            className="btn d-flex align-items-center justify-content-center gap-2 fw-semibold"
             onClick={() => navigate(`/home/jitsi/${jitsiRoomId}`)}
-            disabled={!jitsiRoomId} // データがない場合は無効化
+            disabled={!jitsiRoomId}
+            style={{
+              backgroundColor: '#4f46e5',
+              color: '#fff',
+              borderRadius: '50px',
+              padding: '6px 14px',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            <FaVideo size={18} /> ビデオ通話へ移動
+            <FaVideo size={16} /> ビデオ通話
           </button>
         </div>
 

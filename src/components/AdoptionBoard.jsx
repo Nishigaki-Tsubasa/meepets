@@ -1,20 +1,11 @@
-// AdoptionBoard.jsx
 import React, { useEffect, useState } from "react";
-import {
-    collection,
-    onSnapshot,
-    updateDoc,
-    doc,
-    arrayUnion,
-    arrayRemove,
-    getDoc,
-} from "firebase/firestore";
+import { collection, onSnapshot, updateDoc, doc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebase/firebase";
 import { format } from "date-fns";
 import ja from "date-fns/locale/ja";
 import { useNavigate } from "react-router-dom";
-import { FaHeart, FaRegHeart, FaPlus, FaDog } from "react-icons/fa";
+import { FaDog, FaHeart, FaRegHeart, FaPlus, FaComment, FaMapMarkerAlt } from "react-icons/fa";
 
 const prefectures = [
     "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
@@ -29,33 +20,21 @@ const prefectures = [
 const AdoptionBoard = () => {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [currentUser, setCurrentUser] = useState(null);
     const [selectedPrefecture, setSelectedPrefecture] = useState("");
-
     const auth = getAuth();
     const navigate = useNavigate();
 
-    // Firestoreから投稿取得
     useEffect(() => {
         const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
             if (!user) {
                 setPosts([]);
-                setCurrentUser(null);
                 setLoading(false);
                 return;
-            }
-
-            try {
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                setCurrentUser(userDoc.exists() ? userDoc.data() : null);
-            } catch (err) {
-                console.error("ユーザー情報取得エラー:", err);
             }
 
             const unsubscribePosts = onSnapshot(collection(db, "adoptionPosts"), async (snapshot) => {
                 const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
                 const sorted = docs.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate());
-
                 const withUser = [];
                 for (const post of sorted) {
                     try {
@@ -76,7 +55,6 @@ const AdoptionBoard = () => {
         return () => unsubscribeAuth();
     }, [auth]);
 
-    // いいね処理
     const toggleLike = async (postId, likes = []) => {
         const user = auth.currentUser;
         if (!user) return alert("ログインが必要です");
@@ -92,72 +70,46 @@ const AdoptionBoard = () => {
         }
     };
 
-    if (loading) return <p className="text-center mt-5">読み込み中...</p>;
+    if (loading) return <p className="text-center mt-5" style={{ fontSize: "1.5rem" }}>読み込み中...</p>;
 
-    // フィルター適用
     const filteredPosts = selectedPrefecture
         ? posts.filter((post) => post.area === selectedPrefecture)
         : posts;
 
     return (
-        <div className="container py-3">
-            <style>{`
-        .adopt-card {
-          background: #fff;
-          border-radius: 1rem;
-          border: 1px solid #eee;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-          overflow: hidden;
-          transition: 0.2s;
-        }
-        .adopt-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .adopt-img {
-          width: 100%;
-          height: 220px;
-          object-fit: cover;
-        }
-        .new-post-btn {
-          position: fixed;
-          bottom: 2rem;
-          right: 2rem;
-          border-radius: 50%;
-          width: 3.5rem;
-          height: 3.5rem;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          font-size: 1.3rem;
-        }
-      `}</style>
+        <div style={{ backgroundColor: "#fdfcf7", minHeight: "100vh", padding: "2rem" }}>
+            {/* ヘッダー */}
+            <div style={{
+                display: "flex", flexWrap: "wrap", justifyContent: "space-between",
+                alignItems: "center", backgroundColor: "#fffef9", borderRadius: "1rem",
+                padding: "1.5rem 2rem", boxShadow: "0 6px 20px rgba(0,0,0,0.1)", marginBottom: "1.5rem"
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <h2 style={{ fontWeight: 700, color: "#5a452e", fontSize: "1.8rem", margin: 0 }}>いぬの里親掲示板</h2>
+                </div>
 
-            <h2 className="fw-bold text-primary d-flex align-items-center mb-3">
-                <FaDog className="text-warning me-2" /> いぬの里親募集掲示板
-            </h2>
-
-            {/* 都道府県フィルター */}
-            <div className="mb-3">
                 <select
-                    className="form-select w-auto"
+                    style={{
+                        borderRadius: "2rem",
+                        padding: "0.6rem 1.2rem",
+                        border: "none",
+                        backgroundColor: "rgba(255,255,255,0.85)",
+                        backdropFilter: "blur(6px)",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "1rem"
+                    }}
                     value={selectedPrefecture}
                     onChange={(e) => setSelectedPrefecture(e.target.value)}
                 >
-                    <option value="">全ての地域</option>
-                    {prefectures.map((pref) => (
-                        <option key={pref} value={pref}>
-                            {pref}
-                        </option>
-                    ))}
+                    <option value="">すべての地域</option>
+                    {prefectures.map((pref) => <option key={pref} value={pref}>{pref}</option>)}
                 </select>
             </div>
 
-            {filteredPosts.length === 0 && (
-                <p className="text-center text-muted">投稿がありません</p>
-            )}
+            {filteredPosts.length === 0 && <p className="text-center text-muted" style={{ fontSize: "1.2rem" }}>🐾 投稿がありません</p>}
 
-            <div className="row">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
                 {filteredPosts.map((post) => {
                     const isLiked = post.likes?.includes(auth.currentUser?.uid);
                     const created = post.createdAt?.toDate
@@ -165,44 +117,79 @@ const AdoptionBoard = () => {
                         : "日時不明";
 
                     return (
-                        <div className="col-md-6 mb-4" key={post.id}>
-                            <div className="adopt-card">
-                                {post.imageURL && (
-                                    <img src={post.imageURL} alt="dog" className="adopt-img" />
-                                )}
-                                <div className="p-3">
-                                    <h5 className="fw-bold text-dark">{post.title}</h5>
-                                    <p className="mb-1 text-secondary">
-                                        {post.breed}（{post.age}歳・{post.gender}）
-                                    </p>
-                                    <p className="small">{post.description}</p>
-                                    <p className="text-muted small">地域：{post.area || "不明"}</p>
-                                    <div className="d-flex align-items-center mb-2">
-                                        <button
-                                            className="btn btn-sm d-flex align-items-center me-3"
-                                            onClick={() => toggleLike(post.id, post.likes)}
-                                            style={{ border: "none", background: "transparent" }}
-                                        >
-                                            {isLiked ? (
-                                                <FaHeart className="text-danger me-1" />
-                                            ) : (
-                                                <FaRegHeart className="text-secondary me-1" />
-                                            )}
-                                            <span>{post.likes?.length || 0}</span>
-                                        </button>
-                                        <span className="ms-auto small text-muted">{created}</span>
-                                    </div>
+                        <div key={post.id} style={{
+                            backgroundColor: "#fffef9",
+                            borderRadius: "1rem",
+                            overflow: "hidden",
+                            boxShadow: "0 6px 22px rgba(0,0,0,0.1)",
+                            display: "flex",
+                            flexDirection: "column"
+                        }}>
+                            <div style={{ position: "relative" }}>
+                                <img
+                                    src={post.imageURL || "/images.jpg"}
+                                    alt="dog"
+                                    style={{ width: "100%", height: "260px", objectFit: "cover" }}
+                                />
+                                <span style={{
+                                    position: "absolute",
+                                    top: "0.5rem",
+                                    left: "0.5rem",
+                                    backgroundColor: "rgba(255,255,255,0.85)",
+                                    borderRadius: "0.5rem",
+                                    padding: "0.3rem 0.6rem",
+                                    fontSize: "0.85rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem"
+                                }}>
+                                    <FaMapMarkerAlt className="text-danger" /> {post.area || "不明"}
+                                </span>
+                            </div>
 
-                                    {/* チャットボタン */}
-                                    <div className="d-flex align-items-center mt-2">
-                                        <button
-                                            className="btn btn-outline-primary btn-sm w-100"
-                                            onClick={() => navigate(`/home/chatStart/${post.uid}`)}
-                                        >
-                                            持ち主にチャットを送る
-                                        </button>
-                                    </div>
+                            <div style={{ padding: "1.2rem", borderLeft: "4px solid #ffc107", flex: 1 }}>
+                                <h5 style={{ fontWeight: 700, marginBottom: "0.6rem", fontSize: "1.4rem" }}>{post.title}</h5>
+                                <p style={{ color: "#555", fontSize: "1.05rem", marginBottom: "0.5rem" }}>
+                                    {post.breed}（{post.age}歳・{post.gender}）
+                                </p>
+                                <p style={{ color: "#888", fontSize: "0.95rem" }}>{post.description}</p>
+
+                                <div style={{ display: "flex", alignItems: "center", marginTop: "0.6rem" }}>
+                                    <button
+                                        onClick={() => toggleLike(post.id, post.likes)}
+                                        style={{
+                                            border: "none",
+                                            background: "transparent",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "0.4rem",
+                                            cursor: "pointer",
+                                            fontSize: "1.1rem"
+                                        }}
+                                    >
+                                        {isLiked ? <FaHeart className="text-danger" /> : <FaRegHeart className="text-secondary" />}
+                                        <span>{post.likes?.length || 0}</span>
+                                    </button>
+                                    <span style={{ marginLeft: "auto", fontSize: "0.85rem", color: "#888" }}>{created}</span>
                                 </div>
+
+                                {/* チャット送信ボタン */}
+                                <button
+                                    onClick={() => navigate(`/home/chatStart/${post.uid}`)}
+                                    style={{
+                                        marginTop: "0.7rem",
+                                        width: "100%",
+                                        padding: "0.7rem",
+                                        borderRadius: "1.5rem",
+                                        border: "none",
+                                        backgroundColor: "#ff6f61", // 変更済み
+                                        color: "#fff",
+                                        cursor: "pointer",
+                                        fontSize: "1.05rem"
+                                    }}
+                                >
+                                    <FaComment className="me-2" /> チャットを送信
+                                </button>
                             </div>
                         </div>
                     );
@@ -211,8 +198,24 @@ const AdoptionBoard = () => {
 
             {/* 新規投稿ボタン */}
             <button
-                className="btn btn-primary shadow-lg new-post-btn"
                 onClick={() => navigate("/home/AdoptionForm")}
+                style={{
+                    position: "fixed",
+                    bottom: "2rem",
+                    right: "2rem",
+                    width: "3.6rem",
+                    height: "3.6rem",
+                    borderRadius: "50%",
+                    border: "none",
+                    backgroundColor: "#ff6f61", // 変更済み
+                    color: "#fff",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    fontSize: "1.4rem",
+                    cursor: "pointer",
+                    boxShadow: "0 5px 15px rgba(0,0,0,0.3)"
+                }}
             >
                 <FaPlus />
             </button>

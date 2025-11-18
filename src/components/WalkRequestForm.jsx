@@ -15,9 +15,7 @@ const WalkRequestForm = () => {
     });
     const [loading, setLoading] = useState(false);
 
-    const handleChange = (e) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
-    };
+    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -35,9 +33,7 @@ const WalkRequestForm = () => {
         try {
             const userDocRef = doc(db, "users", user.uid);
             const userDocSnap = await getDoc(userDocRef);
-
             if (!userDocSnap.exists()) throw new Error("ユーザーデータが見つかりません");
-
             const userData = userDocSnap.data();
 
             const petData = {
@@ -56,25 +52,14 @@ const WalkRequestForm = () => {
                 pet: petData,
                 prefecture: form.prefecture,
                 location: form.location,
-                datetime:
-                    form.date && form.time
-                        ? Timestamp.fromDate(new Date(`${form.date}T${form.time}:00`))
-                        : null,
+                datetime: form.date && form.time ? Timestamp.fromDate(new Date(`${form.date}T${form.time}:00`)) : null,
                 createdAt: Timestamp.now(),
                 status: "open",
                 applicants: [],
                 roomId: uuidv4(),
             });
 
-            setForm({
-                title: "",
-                content: "",
-                prefecture: "",
-                location: "",
-                date: "",
-                time: "",
-            });
-
+            setForm({ title: "", content: "", prefecture: "", location: "", date: "", time: "" });
             window.location.href = "/home/WalkList";
         } catch (error) {
             console.error(error);
@@ -89,9 +74,9 @@ const WalkRequestForm = () => {
             <style>{`
         .walk-form {
           background-color: #fffaf3;
-          max-width: 650px;
+          max-width: 600px;
           margin: 0 auto;
-          padding: 2.5rem;
+          padding: 2rem;
           border-radius: 1.5rem;
           box-shadow: 0 6px 16px rgba(0,0,0,0.1);
           font-size: 1rem;
@@ -100,8 +85,8 @@ const WalkRequestForm = () => {
           text-align: center;
           font-weight: bold;
           color: #5a452e;
-          font-size: clamp(1.6rem, 4vw, 2.2rem);
-          margin-bottom: 1.8rem;
+          font-size: 1.8rem;
+          margin-bottom: 1.5rem;
           display: flex;
           justify-content: center;
           align-items: center;
@@ -110,42 +95,48 @@ const WalkRequestForm = () => {
         .form-label {
           font-weight: 600;
           color: #3f3b36;
+          font-size: 1rem;
         }
         .form-control {
           border: 1px solid #d5c9b8;
           border-radius: 0.5rem;
           padding: 0.6rem 0.9rem;
+          font-size: 1rem;
           transition: all 0.2s ease;
         }
         .form-control:focus {
-          border-color: #86b97e;
-          box-shadow: 0 0 0 3px rgba(134, 185, 126, 0.25);
+          border-color: #fbbf24; /* ボタン色に統一 */
+          box-shadow: 0 0 0 3px rgba(251,191,36,0.25);
         }
-        .Walk-btn {
-          background: linear-gradient(135deg, #8bc34a, #6da73b);
-          color: #fff;
-          font-weight: 600;
-          font-size: 1.1rem;
-          border: none;
-          border-radius: 0.7rem;
-          padding: 0.7rem;
-          transition: all 0.3s ease;
-        }
-        .Walk-btn:hover:not(:disabled) {
-          background: linear-gradient(135deg, #7bb041, #5d8f33);
-          transform: translateY(-1px);
-        }
-        .Walk-btn:disabled {
-          background: #bcd5a0;
-          cursor: not-allowed;
-        }
+       .Walk-btn {
+  background-color: #ff6f61; /* ボタン色を変更 */
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.05rem;
+  border: none;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0;
+  transition: all 0.3s ease;
+}
+.Walk-btn:hover:not(:disabled) {
+  background-color: #e65b53; /* 少し濃くしてホバー時の演出 */
+  transform: translateY(-1px);
+}
+.Walk-btn:disabled {
+  background: #f7a79c; /* 無効時の淡い色 */
+  cursor: not-allowed;
+}
+
         .note-text {
           font-size: 0.9rem;
           color: #7d756b;
         }
+        @media (max-width: 576px) {
+          .walk-form { padding: 1.5rem; }
+        }
       `}</style>
 
-            <h2 className="form-title">🐾 ペット掲示板に投稿する</h2>
+            <h2 className="form-title">ペット掲示板に投稿する</h2>
 
             <form className="walk-form" onSubmit={handleSubmit}>
                 <div className="mb-4">
@@ -174,7 +165,6 @@ const WalkRequestForm = () => {
                     ></textarea>
                 </div>
 
-                {/* 都道府県と具体的な場所 */}
                 <div className="mb-4">
                     <label className="form-label">都道府県</label>
                     <select
@@ -194,9 +184,7 @@ const WalkRequestForm = () => {
                             "鳥取県", "島根県", "岡山県", "広島県", "山口県",
                             "徳島県", "香川県", "愛媛県", "高知県",
                             "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
-                        ].map((pref) => (
-                            <option key={pref} value={pref}>{pref}</option>
-                        ))}
+                        ].map((pref) => <option key={pref} value={pref}>{pref}</option>)}
                     </select>
 
                     <label className="form-label">具体的な場所</label>
@@ -235,7 +223,7 @@ const WalkRequestForm = () => {
                 </div>
 
                 <button type="submit" className="Walk-btn w-100" disabled={loading}>
-                    {loading ? "投稿中..." : "🐕 掲示板に投稿する"}
+                    {loading ? "投稿中..." : "掲示板に投稿する"}
                 </button>
             </form>
         </div>

@@ -1,127 +1,191 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getAuth } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
-import '../styles/HomeCompo.css';
+import React, { useEffect, useState } from "react";
+import { getAuth } from "firebase/auth";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
+import { db } from "../firebase/firebase";
+import WalkCard from "./WalkCard";
 
 const HomeComponents = () => {
-    const navigate = useNavigate();
     const auth = getAuth();
-    const user = auth.currentUser;
+    const navigate = useNavigate();
+    const [userData, setUserData] = useState(null);
+    const [myWalks, setMyWalks] = useState([]);
+    const [latestWalks, setLatestWalks] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const [currentUserData, setCurrentUserData] = useState(null);
-    const [mealRequests, setMealRequests] = useState([]);
+    // 色コードを直接定義
+    const mainBg = "#fdfcf7";
+    const subBg = "#faf7ee";
+    const accentBg = "#ff6f61";
+    const sidebarText = "#333333";
+    const sidebarFont = "M PLUS Rounded 1c";
+    const sidebarFontWeight = "bold";
+    const buttonText = "#FFFFFF";
+    const hoverBg = "#e0e0e0";
+    const hoverText = "#000000";
 
     useEffect(() => {
-        if (!user) return;
-
         const fetchData = async () => {
-            try {
-                // 現在ログイン中のユーザーデータ取得
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    setCurrentUserData(userDoc.data());
-                }
+            const user = auth.currentUser;
+            if (!user) return;
 
-                // mealRequests コレクション取得
-                const mealSnap = await getDocs(collection(db, 'mealRequests'));
-                const list = [];
-                const now = new Date();
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) setUserData(userDoc.data());
 
-                for (const docSnap of mealSnap.docs) {
-                    const data = docSnap.data();
-                    if (data.uid !== user.uid) {
-                        let hostName = '不明';
-                        const hostDoc = await getDoc(doc(db, 'users', data.uid));
-                        if (hostDoc.exists()) {
-                            hostName = hostDoc.data().username || '不明';
-                        }
+            const snap = await getDocs(collection(db, "walkRequests"));
+            const allWalks = [];
+            const now = new Date();
 
-                        const startDate = data.startTime?.toDate();
-                        if (startDate && startDate > now) {
-                            list.push({
-                                id: docSnap.id,
-                                ...data,
-                                hostName,
-                            });
-                        }
-                    }
-                }
-
-                const upcomingMeals = list
-                    .sort((a, b) => a.startTime.toDate() - b.startTime.toDate())
-                    .slice(0, 4);
-
-                setMealRequests(upcomingMeals);
-            } catch (error) {
-                console.error('データ取得エラー:', error);
+            for (const docSnap of snap.docs) {
+                const data = docSnap.data();
+                const ownerSnap = await getDoc(doc(db, "users", data.uid));
+                allWalks.push({
+                    id: docSnap.id,
+                    ...data,
+                    owner: ownerSnap.exists() ? ownerSnap.data() : {},
+                });
             }
+
+            setMyWalks(
+                allWalks
+                    .filter((w) => w.uid === user.uid && w.datetime?.toDate() > now)
+                    .sort((a, b) => a.datetime.toDate() - b.datetime.toDate())
+            );
+
+            setLatestWalks(
+                allWalks
+                    .filter((w) => w.uid !== user.uid && w.datetime?.toDate() > now)
+                    .sort((a, b) => a.datetime.toDate() - b.datetime.toDate())
+                    .slice(0, 5)
+            );
+
+            setLoading(false);
         };
-
         fetchData();
-    }, [user]);
+    }, []);
 
-    if (!user) return <p>ログインしてください</p>;
-    if (!currentUserData) return <p>読み込み中...</p>;
+    if (!auth.currentUser) return <p>ログインしてください</p>;
+    if (loading || !userData) return <p>読み込み中...</p>;
+
+    // シンプルなセクション枠
+    const sectionStyle = {
+        background: subBg,
+        padding: "1rem",
+        border: "1px solid #ddd",
+        borderRadius: "8px",
+        marginBottom: "1.5rem",
+        color: sidebarText,
+        fontFamily: sidebarFont,
+    };
 
     return (
-        <div className="container mt-4">
-            {/* 挨拶セクション */}
-            <div className="card shadow-sm border-0 mb-4 p-3 p-md-4 bg-light">
-                <h2 className="mb-2 mb-md-3" style={{ fontSize: '1.5rem' }}>
-                    こんにちは、{currentUserData.username}さん
+        <div
+            style={{
+                minHeight: "100vh",
+                padding: "1.5rem",
+                background: mainBg,
+                fontFamily: sidebarFont,
+                color: sidebarText,
+            }}
+        >
+            {/* ヘッダー */}
+            <div style={{ ...sectionStyle, textAlign: "center" }}>
+                <h2 style={{ marginBottom: "1rem", fontWeight: sidebarFontWeight }}>
+                    今日のお散歩を投稿しよう
                 </h2>
-                <p className="lead mb-3 mb-md-4" style={{ fontSize: '0.9rem' }}>
-                    今日の食事を登録して、一緒に食べる相手を見つけましょう！
-                </p>
+
                 <button
-                    className="btn Home-btn btn-lg w-100 w-md-auto"
-                    style={{ fontSize: '0.9rem' }}
-                    onClick={() => navigate('/home/new-request')}
+                    style={{
+                        padding: "0.6rem 1rem",
+                        background: accentBg,
+                        color: buttonText,
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontFamily: sidebarFont,
+                        fontWeight: "bold",
+                    }}
+                    onClick={() => navigate("/home/walkRequest")}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 >
-                    食事時間を登録
+                    お散歩を登録する
                 </button>
             </div>
 
-            {/* おすすめの食事予定 */}
-            <h3 className="mb-3" style={{ fontSize: '1.2rem' }}>🍽️ おすすめ予定</h3>
+            {/* 自分の散歩 */}
+            <div style={sectionStyle}>
+                <h3 style={{ marginBottom: "1rem", fontWeight: "bold" }}>
+                    自分の散歩予定
+                </h3>
 
-            {mealRequests.length === 0 ? (
-                <div className="alert alert-info" role="alert" style={{ fontSize: '0.9rem' }}>
-                    現在公開されている食事予定はありません。
-                </div>
-            ) : (
-                <div className="row">
-                    {mealRequests.map((meal) => (
-                        <div key={meal.id} className="col-12 col-md-6 mb-3 mb-md-4">
-                            <div className="card shadow-sm h-100">
-                                <div className="card-body">
-                                    <h5 className="card-title" style={{ fontSize: '1rem' }}>
-                                        {meal.genre} / {meal.menu}
-                                    </h5>
-                                    <h6 className="card-subtitle mb-2 text-muted" style={{ fontSize: '0.8rem' }}>
-                                        投稿者: {meal.hostName}
-                                    </h6>
-                                    <hr />
-                                    <p className="card-text mb-2" style={{ fontSize: '0.85rem' }}>
-                                        <strong>日時:</strong>{' '}
-                                        {meal.startTime.toDate().toLocaleString('ja-JP', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}<br />
-                                        <strong>時間:</strong>{' '}
-                                        {Math.round(meal.durationHours * 60)}分
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                {myWalks.length === 0 ? (
+                    <p>まだ散歩の予定がありません。</p>
+                ) : (
+                    myWalks.map((walk) => <WalkCard key={walk.id} walk={walk} />)
+                )}
+            </div>
+
+            {/* おすすめ散歩 */}
+            <div style={sectionStyle}>
+                <h3 style={{ marginBottom: "1rem", fontWeight: "bold" }}>
+                    おすすめ散歩
+                </h3>
+
+                {latestWalks.length === 0 ? (
+                    <p>投稿がありません</p>
+                ) : (
+                    latestWalks.map((walk) => <WalkCard key={walk.id} walk={walk} />)
+                )}
+
+                {latestWalks.length >= 5 && (
+                    <button
+                        style={{
+                            marginTop: "0.75rem",
+                            padding: "0.5rem 1rem",
+                            background: subBg,
+                            border: "1px solid #ccc",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontFamily: sidebarFont,
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = hoverBg;
+                            e.currentTarget.style.color = hoverText;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = subBg;
+                            e.currentTarget.style.color = sidebarText;
+                        }}
+                        onClick={() => navigate("/home/walkList")}
+                    >
+                        もっと見る
+                    </button>
+                )}
+            </div>
+
+            {/* 右下の追加ボタン */}
+            <button
+                style={{
+                    position: "fixed",
+                    bottom: "1.5rem",
+                    right: "1.5rem",
+                    width: "3rem",
+                    height: "3rem",
+                    borderRadius: "50%",
+                    background: accentBg,
+                    color: buttonText,
+                    border: "none",
+                    fontSize: "1.6rem",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                onClick={() => navigate("/home/walkRequest")}
+            >
+                +
+            </button>
         </div>
     );
 };

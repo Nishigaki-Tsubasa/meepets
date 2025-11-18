@@ -199,7 +199,7 @@ function Login() {
                         </span>
                     </small>
                     <br />
-                    <small>
+                    {/* <small>
                         アプリの使い方{' '}
                         <a
                             href="https://v0-remix-of-meeple-app-documentati.vercel.app/"
@@ -209,7 +209,7 @@ function Login() {
                         >
                             こちら
                         </a>
-                    </small>
+                    </small> */}
                 </div>
             </div>
         </div>
